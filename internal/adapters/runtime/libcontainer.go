@@ -44,16 +44,17 @@ func NewLibContainerRuntime() (ports.ContainerRuntime, error) {
 func createCgroupParent() error {
 	// Let's create the parent Cgroup from which we are going to latter create the containers
 	cgroupConfig := &cgroups.Cgroup{
-		Path: Cgroup,
+		Path:      Cgroup,
+		Resources: &cgroups.Resources{},
 	}
 
 	config := &configs.Config{
 		Cgroups: cgroupConfig,
-		Rootfs:  "/var/lib/nexus/images/alpine-base",
+		Rootfs:  "/",
 	}
 
 	// We will have to manually remove the state folder in the container directory
-	// Let's define a tempory id
+	// Let's define a temporary id
 	tempID := "init-parent-cgroup" // the temporary ID of the container
 	tempDir := filepath.Join(StatePath, tempID)
 
@@ -117,7 +118,7 @@ func createCgroupParent() error {
 func (r *LibContainerRuntime) CreateAndStart(conf core.NodeConfig) (*core.NodeState, error) {
 	// Here we are going to define the isolation contract
 	config := &configs.Config{
-		Rootfs: r.RootStatePath, // We use the state path as the root
+		Rootfs: conf.RootfsPath, // We use the state path as the root
 		Namespaces: configs.Namespaces{
 			{Type: configs.NEWPID},
 			{Type: configs.NEWNS},
@@ -152,11 +153,13 @@ func (r *LibContainerRuntime) CreateAndStart(conf core.NodeConfig) (*core.NodeSt
 			{Source: "tmpfs", Destination: "/dev", Device: "tmpfs", Flags: syscall.MS_NOSUID | syscall.MS_STRICTATIME, Data: "mode=755"},
 			{Source: "devpts", Destination: "/dev/pts", Device: "devpts", Flags: syscall.MS_NOSUID | syscall.MS_NOEXEC},
 		},
+		UIDMappings: []configs.IDMap{},
+		GIDMappings: []configs.IDMap{},
 	}
 
 	//The libcontainer.Create method use our r.RootStatePath to store the state of the container
 
-	container, err := libcontainer.Create(r.RootStatePath, conf.ID, config)
+	container, err := libcontainer.Create(conf.RootfsPath, conf.ID, config)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create the container libcontaire for  %s: %w", conf.ID, err)
 	}
