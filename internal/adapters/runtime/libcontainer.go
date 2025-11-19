@@ -125,6 +125,7 @@ func (r *LibContainerRuntime) CreateAndStart(conf core.NodeConfig) (*core.NodeSt
 			{Type: configs.NEWUTS},
 			{Type: configs.NEWIPC},
 			{Type: configs.NEWNET},
+			{Type: configs.NEWCGROUP},
 		},
 
 		Cgroups: &cgroups.Cgroup{
@@ -152,9 +153,16 @@ func (r *LibContainerRuntime) CreateAndStart(conf core.NodeConfig) (*core.NodeSt
 			{Source: "sysfs", Destination: "/sys", Device: "sysfs", Flags: syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV},
 			{Source: "tmpfs", Destination: "/dev", Device: "tmpfs", Flags: syscall.MS_NOSUID | syscall.MS_STRICTATIME, Data: "mode=755"},
 			{Source: "devpts", Destination: "/dev/pts", Device: "devpts", Flags: syscall.MS_NOSUID | syscall.MS_NOEXEC},
+			{
+				Source:      "shm",
+				Destination: "/dev/shm",
+				Device:      "tmpfs",
+				Flags:       syscall.MS_NOSUID | syscall.MS_NOEXEC | syscall.MS_NODEV,
+			},
+			{Source: "proc", Destination: "/proc", Device: "proc", Flags: syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV},
 		},
-		/*UIDMappings: []configs.IDMap{},
-		GIDMappings: []configs.IDMap{},*/
+		UIDMappings: []configs.IDMap{},
+		GIDMappings: []configs.IDMap{},
 	}
 
 	//The libcontainer.Create method use our r.RootStatePath to store the state of the container
