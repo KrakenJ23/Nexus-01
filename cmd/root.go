@@ -1,21 +1,40 @@
 /*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-
+Copyright © 2025 Zingui Fred Mike <mikezingui@yahoo.com>
 */
 package cmd
 
 import (
+	"github.com/opencontainers/runc/libcontainer"
+	_ "github.com/opencontainers/runc/libcontainer/nsenter"
 	"os"
+	"runtime"
 
 	"github.com/spf13/cobra"
 )
 
+var initCmd = &cobra.Command{
+	Use:    "init",
+	Short:  "Init process for libcontainer (INTERNAL ONLY)",
+	Hidden: true,
+	Run: func(cmd *cobra.Command, args []string) {
+		// 1. Verrouillage du thread OS
+		// Les namespaces Linux sont liés au thread, pas à la Goroutine.
+		// On doit s'assurer que ce code reste sur le thread principal.
+		runtime.GOMAXPROCS(1)
+		runtime.LockOSThread()
 
+		// 2. Initialisation du conteneur (Nouvelle API)
+		// Plus de Factory, plus de New(), plus de Cgroupfs.
+		// Init() récupère automatiquement la configuration envoyée par le processus parent via le pipe.
+		libcontainer.Init()
+
+	},
+}
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "Nexus",
-	Short: "A brief description of your application",
+	Short: "Cloud Storage & computation tool",
 	Long: `A longer description that spans multiple lines and likely contains
 examples and usage of using your application. For example:
 
@@ -46,6 +65,5 @@ func init() {
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.AddCommand(initCmd)
 }
-
-
