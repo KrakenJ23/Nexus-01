@@ -17,15 +17,13 @@ var initCmd = &cobra.Command{
 	Short:  "Init process for libcontainer (INTERNAL ONLY)",
 	Hidden: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		// 1. Verrouillage du thread OS
-		// Les namespaces Linux sont liés au thread, pas à la Goroutine.
-		// On doit s'assurer que ce code reste sur le thread principal.
+		// locking the main Thread
+		// linux namespaces are related to the thread , not the light threads(goroutines) | so we have to make sure this code stays on the main thread
 		runtime.GOMAXPROCS(1)
 		runtime.LockOSThread()
 
-		// 2. Initialisation du conteneur (Nouvelle API)
-		// Plus de Factory, plus de New(), plus de Cgroupfs.
-		// Init() récupère automatiquement la configuration envoyée par le processus parent via le pipe.
+		// Let's initialize the continaer
+		// Init will fetch the configurations sent by the parent process through the pipe
 		libcontainer.Init()
 
 	},
@@ -41,9 +39,6 @@ examples and usage of using your application. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
