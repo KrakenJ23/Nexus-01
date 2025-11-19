@@ -54,6 +54,7 @@ func init() {
 		panic(fmt.Sprintf("Critical Error when initializing the service: %v", err))
 	}
 	// let's add the command create
+	rootCmd.AddCommand(nodeCmd)
 	nodeCmd.AddCommand(nodeCreateCmd)
 	//  let's add the flags for the create command
 	nodeCreateCmd.Flags().Int64Var(&memFlag, "mem", 128, "allocated memory in megabytes (ex: 64, 256, 512)")

@@ -37,7 +37,7 @@ func (s *NodeService) CreateNode(name string, mem int64, cpuShare uint64) (*core
 		RootfsPath: rootfsPath,
 		Memory:     mem,
 		CPUShares:  cpuShare,
-		Command:    []string{"/bin/bash", "-c", "sleep 3600"}, // our process
+		Command:    []string{"/bin/sh", "-c", "sleep 3600"}, // our process
 	}
 
 	// Now let's call the adapter by using the interface
@@ -45,5 +45,7 @@ func (s *NodeService) CreateNode(name string, mem int64, cpuShare uint64) (*core
 	if err != nil {
 		return nil, fmt.Errorf("unable to create a new node %v", err.Error())
 	}
+
+	//TODO : on top of this , i will need a persistence logic to keep the node state in the hard
 	return state, nil
 }

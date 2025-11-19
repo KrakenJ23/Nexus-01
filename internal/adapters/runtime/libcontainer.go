@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"path/filepath"
 	"syscall"
 
 	"github.com/opencontainers/cgroups"
@@ -17,8 +16,9 @@ import (
 // Those are the constant pointing to the state of the nodes and the Cgroups
 
 const (
-	StatePath = "/run/nexus" // folder where to find the state of the container
-	Cgroup    = "/nexus"     // this is the name of the parent cgroup, we need to precise this to isolate our containers from one another
+	StatePath    = "/run/nexus" // folder where to find the state of the container
+	Cgroup       = "/nexus"     // this is the name of the parent cgroup, we need to precise this to isolate our containers from one another
+	CgroupFsPath = "/sys/fs/cgroup/nexus"
 )
 
 // LibContainerRuntime will be the root path of the state
@@ -36,53 +36,35 @@ func NewLibContainerRuntime() (ports.ContainerRuntime, error) {
 	// Let's create the parent Cgroup that will allow us to monitor the global state of all of our nodes
 	ParentCgroupError := createCgroupParent()
 	if ParentCgroupError != nil {
-		return nil, fmt.Errorf("an error occured when creating the parent cgroup %s : %w", StatePath, ParentCgroupError)
+		return nil, fmt.Errorf("an error occured when creating the parent cgroup %s : %w", CgroupFsPath, ParentCgroupError)
 	}
 	return &LibContainerRuntime{RootStatePath: StatePath}, nil
 }
 
 func createCgroupParent() error {
-	// Let's create the parent Cgroup from which we are going to latter create the containers
-	cgroupConfig := &cgroups.Cgroup{
-		Path:      Cgroup,
-		Resources: &cgroups.Resources{},
+	// 1. Création du dossier physique
+	if err := os.MkdirAll(CgroupFsPath, 0755); err != nil {
+		return err
 	}
 
-	config := &configs.Config{
-		Cgroups: cgroupConfig,
-		Rootfs:  "/",
+	// 2. Activation des contrôleurs pour Cgroup V2 (Ubuntu)
+	// Le fichier qui contrôle ça est cgroup.subtree_control
+	subtreeControl := path.Join(CgroupFsPath, "cgroup.subtree_control")
+
+	// On essaie d'activer les contrôleurs essentiels UN PAR UN.
+	// Comme ça, si le CPU est bloqué par le système, la Mémoire fonctionnera quand même.
+	// +pids est souvent requis pour pouvoir ajouter des processus.
+	controllers := []string{"+cpu", "+memory", "+pids"}
+
+	for _, ctrl := range controllers {
+		// On ignore l'erreur volontairement ici (Best Effort), mais on le fait séparément
+		// pour maximiser les chances de succès.
+		_ = os.WriteFile(subtreeControl, []byte(ctrl), 0644)
 	}
 
-	// We will have to manually remove the state folder in the container directory
-	// Let's define a temporary id
-	tempID := "init-parent-cgroup" // the temporary ID of the container
-	tempDir := filepath.Join(StatePath, tempID)
+	// Vérification visuelle pour le debug (affiché dans la console)
+	fmt.Println("✅ Cgroup parent /sys/fs/cgroup/nexus prêt (Controllers activés)")
 
-	// Let's create the container
-	container, CreateContainerError := libcontainer.Create(StatePath, tempID, config)
-	if CreateContainerError != nil {
-		return fmt.Errorf("an error occured when tried to create a new container %s : %w", StatePath, CreateContainerError)
-	}
-
-	// We will use defer to make sure the state folder get destroyed but ensure we don't call container.Destroy()
-	defer func() {
-		removeError := os.RemoveAll(tempDir)
-		if removeError != nil {
-			fmt.Errorf("an error occured when tried to remove the state folder from the container folder")
-		}
-	}() // ensure this is a function call
-
-	//Let's force the creation of cgroup on the disk using the RUN()
-	process := &libcontainer.Process{
-		Args: []string{"/bin/true"},
-		Env:  []string{"PATH=/bin:/usr/bin"},
-	}
-
-	runningError := container.Run(process)
-	if runningError != nil {
-		defer container.Destroy()
-		fmt.Errorf("an error occured when tried to run the container %s : %w", tempID, runningError)
-	}
 	return nil
 }
 
@@ -116,6 +98,12 @@ func createCgroupParent() error {
 */
 
 func (r *LibContainerRuntime) CreateAndStart(conf core.NodeConfig) (*core.NodeState, error) {
+	nodeCgroupPath := path.Join(CgroupFsPath, conf.ID)
+
+	// On crée le dossier manuellement. Le noyau créera automatiquement les fichiers (cgroup.procs, etc.) à l'intérieur.
+	if err := os.MkdirAll(nodeCgroupPath, 0755); err != nil {
+		return nil, fmt.Errorf("failed to manually create node cgroup %s: %w", nodeCgroupPath, err)
+	}
 	// Here we are going to define the isolation contract
 	config := &configs.Config{
 		Rootfs: conf.RootfsPath, // We use the state path as the root
@@ -189,16 +177,12 @@ func (r *LibContainerRuntime) CreateAndStart(conf core.NodeConfig) (*core.NodeSt
 		return nil, fmt.Errorf("failed to run for  %s: %w", conf.ID, err)
 	}
 
-	// NOw let's fetch the state of the container using container.Create | more precisely , let's fetch the PID
-	state, err := container.State()
-	if err != nil {
-		container.Destroy() // Let's clean up in case of a failure | however i didn't think handling this error would be necessary | We will see
-		return nil, fmt.Errorf("unable to read the state of the containre %s: %w", conf.ID, err)
-	}
+	// NOw  let's fetch the PID directly from the running process
+	hostPID, _ := process.Pid()
 
 	nodeState := &core.NodeState{
 		NodeConfig: conf,
-		PID:        state.InitProcessPid, // This is the PID of the running container
+		PID:        hostPID, // This is the PID of the running container
 		Status:     "Running",
 	}
 
