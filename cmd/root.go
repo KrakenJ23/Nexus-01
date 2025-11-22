@@ -1,30 +1,44 @@
 /*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-
+Copyright © 2025 Zingui Fred Mike <mikezingui@yahoo.com>
 */
 package cmd
 
 import (
+	"github.com/opencontainers/runc/libcontainer"
+	_ "github.com/opencontainers/runc/libcontainer/nsenter"
 	"os"
+	"runtime"
 
 	"github.com/spf13/cobra"
 )
 
+var initCmd = &cobra.Command{
+	Use:    "init",
+	Short:  "Init process for libcontainer (INTERNAL ONLY)",
+	Hidden: true,
+	Run: func(cmd *cobra.Command, args []string) {
+		// locking the main Thread
+		// linux namespaces are related to the thread , not the light threads(goroutines) | so we have to make sure this code stays on the main thread
+		runtime.GOMAXPROCS(1)
+		runtime.LockOSThread()
 
+		// Let's initialize the continaer
+		// Init will fetch the configurations sent by the parent process through the pipe
+		libcontainer.Init()
+
+	},
+}
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "Nexus",
-	Short: "A brief description of your application",
+	Short: "Cloud Storage & computation tool",
 	Long: `A longer description that spans multiple lines and likely contains
 examples and usage of using your application. For example:
 
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -46,6 +60,5 @@ func init() {
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.AddCommand(initCmd)
 }
-
-
